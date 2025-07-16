@@ -1,0 +1,9 @@
+# Image Recognition Prototype - Requirements
+
+torch
+torchvision
+numpy
+faiss-cpu
+pillow
+fastapi
+uvicorn

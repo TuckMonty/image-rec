@@ -1,0 +1,6 @@
+ - resolve the OpenMP issue. Here's what we did as a temp fix: 
+ This error is caused by conflicting OpenMP runtime libraries (often from different Python packages like PyTorch and FAISS).
+To work around it for testing, set the environment variable KMP_DUPLICATE_LIB_OK=TRUE before starting your server.
+This will allow the server to run despite the conflict.
+For a permanent fix, you may need to align package versions or use a different vector search library, but this workaround is safe for prototyping.
+
