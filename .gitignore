@@ -1,0 +1,5 @@
+node_modules/
+/data
+data/*
+data/features_multi.npy
+data/features_multi.npy

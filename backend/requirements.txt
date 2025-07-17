@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+numpy
+pillow
+torch
+torchvision
+faiss-cpu

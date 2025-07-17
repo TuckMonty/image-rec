@@ -50,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("--topk", type=int, default=5, help="Number of top matches to return")
     args = parser.parse_args()
 
-    from feature_extractor import FeatureExtractor
+    from .feature_extractor import FeatureExtractor
     extractor = FeatureExtractor()
     query_feat = extractor.extract(args.query)
     db = ImageDatabaseMulti(args.features)
