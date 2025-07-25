@@ -1,13 +1,18 @@
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 from fastapi import FastAPI, File, UploadFile, Form, Path
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
 import os
 import numpy as np
+
 from .feature_extractor import FeatureExtractor
 from .image_database_multi import ImageDatabaseMulti
-from .item_metadata import add_item_metadata, remove_item_metadata, get_item_name
-from .item_list import get_item_list, get_item_image, get_item_images
+from .db import SessionLocal, Item, Image
+from sqlalchemy.orm import Session
+from .storage import upload_fileobj_to_s3, generate_presigned_url, delete_file_from_s3
 
 app = FastAPI()
 
@@ -42,71 +47,170 @@ def update_features():
                 features[item_id] = item_features
     np.save(FEATURES_PATH, features)
 
+
+
 @app.post("/upload/")
 async def upload_image(item_id: str = Form(...), file: UploadFile = File(...), item_name: str = Form(None)):
-    # Save uploaded image to the item's subfolder
-    item_dir = os.path.join(DATA_DIR, item_id)
-    os.makedirs(item_dir, exist_ok=True)
-    file_path = os.path.join(item_dir, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    # Save item name if provided
-    if item_name:
-        add_item_metadata(item_id, item_name)
-    update_features()
-    return {"item_id": item_id, "filename": file.filename, "status": "uploaded and features updated"}
+    import tempfile
+    db: Session = SessionLocal()
+    # Ensure item exists or create it
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        item = Item(id=item_id, name=item_name or item_id)
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+    # Read file content into memory once
+    from io import BytesIO
+    file.file.seek(0)
+    file_bytes = file.file.read()
+    s3_key = f"{item_id}/{file.filename}"
+    # Upload to S3 from memory
+    upload_fileobj_to_s3(BytesIO(file_bytes), s3_key, content_type=file.content_type)
+    # Save to temp file for feature extraction
+    suffix = os.path.splitext(file.filename)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(file_bytes)
+        temp_path = tmp.name
+    feat = extractor.extract(temp_path)
+    feat_bytes = np.asarray(feat, dtype=np.float32).tobytes()
+    os.remove(temp_path)
+    # Add image record to DB with vector
+    image = Image(item_id=item_id, filename=file.filename, s3_key=s3_key, vector=feat_bytes)
+    db.add(image)
+    db.commit()
+    db.refresh(image)
+    presigned_url = generate_presigned_url(s3_key)
+    db.close()
+    return {"item_id": item_id, "filename": file.filename, "s3_key": s3_key, "url": presigned_url, "status": "uploaded to S3 and DB with vector"}
+
+
+import faiss
+
+# Helper to load all vectors from DB into FAISS
+def build_faiss_index():
+    db: Session = SessionLocal()
+    images = db.query(Image).filter(Image.vector != None).all()
+    if not images:
+        db.close()
+        return None, [], []
+    vectors = [np.frombuffer(img.vector, dtype=np.float32) for img in images]
+    vectors = np.stack(vectors).astype('float32')
+    index = faiss.IndexFlatL2(vectors.shape[1])
+    index.add(vectors)
+    db.close()
+    return index, images, vectors
+
+faiss_index, faiss_images, faiss_vectors = build_faiss_index()
 
 @app.post("/query/")
 async def query_image(file: UploadFile = File(...), topk: int = Form(5)):
-    temp_path = os.path.join(DATA_DIR, "_query_temp_" + file.filename)
-    with open(temp_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    import tempfile
+    global faiss_index, faiss_images, faiss_vectors
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        temp_path = tmp.name
     query_feat = extractor.extract(temp_path)
-    db = ImageDatabaseMulti(FEATURES_PATH)
-    results = db.search(query_feat, top_k=topk)
     os.remove(temp_path)
-    return JSONResponse({
-        "matches": [
-            {"item_id": item_id, "item_name": get_item_name(item_id), "distance": float(dist)}
-            for item_id, dist in results
-        ]
-    })
+    if faiss_index is None or len(faiss_images) == 0:
+        return JSONResponse({"matches": []})
+    query_feat = np.asarray(query_feat, dtype=np.float32).reshape(1, -1)
+    D, I = faiss_index.search(query_feat, min(topk, len(faiss_images)))
+    matches = []
+    for idx, dist in zip(I[0], D[0]):
+        if idx < len(faiss_images):
+            img = faiss_images[idx]
+            matches.append({
+                "item_id": img.item_id,
+                "filename": img.filename,
+                "distance": float(dist)
+            })
+    return JSONResponse({"matches": matches})
+
+
 
 @app.delete("/item/{item_id}")
 async def delete_item(item_id: str):
-    # Remove item images
-    item_dir = os.path.join(DATA_DIR, item_id)
-    if os.path.isdir(item_dir):
-        for fname in os.listdir(item_dir):
-            os.remove(os.path.join(item_dir, fname))
-        os.rmdir(item_dir)
-    # Remove metadata
-    remove_item_metadata(item_id)
+    db: Session = SessionLocal()
+    # Delete all images for this item from S3 and DB
+    images = db.query(Image).filter(Image.item_id == item_id).all()
+    for img in images:
+        try:
+            delete_file_from_s3(img.s3_key)
+        except Exception:
+            pass
+        db.delete(img)
+    # Delete item
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if item:
+        db.delete(item)
+    db.commit()
+    db.close()
     update_features()
-    return {"item_id": item_id, "status": "deleted"}
+    return {"item_id": item_id, "status": "deleted from S3 and DB"}
+
+
 
 @app.delete("/item_image/{item_id}/{filename}")
 def delete_item_image(item_id: str, filename: str):
-    item_dir = os.path.join(DATA_DIR, item_id)
-    file_path = os.path.join(item_dir, filename)
-    if os.path.isfile(file_path):
-        os.remove(file_path)
+    db: Session = SessionLocal()
+    image = db.query(Image).filter(Image.item_id == item_id, Image.filename == filename).first()
+    if image:
+        try:
+            delete_file_from_s3(image.s3_key)
+        except Exception:
+            pass
+        db.delete(image)
+        db.commit()
+        db.close()
         update_features()
-        return {"item_id": item_id, "filename": filename, "status": "deleted"}
-    return {"error": "File not found"}
+        return {"item_id": item_id, "filename": filename, "status": "deleted from S3 and DB"}
+    db.close()
+    return {"error": "File not found in DB"}
 
 @app.get("/")
 def root():
     return {"message": "Image Recognition API is running."}
 
+
 @app.get("/items/")
 def list_items():
-    return {"items": get_item_list()}
+    db: Session = SessionLocal()
+    items = db.query(Item).all()
+    result = []
+    for item in items:
+        # Get preview image (first image)
+        images = item.images
+        preview_url = None
+        if images:
+            preview_url = generate_presigned_url(images[0].s3_key)
+        result.append({
+            "item_id": item.id,
+            "item_name": item.name,
+            "preview_image": preview_url,
+            "ctime": item.created_at.timestamp() if item.created_at else 0
+        })
+    db.close()
+    result.sort(key=lambda x: x["ctime"])
+    return {"items": result}
+
 
 @app.get("/item_image/{item_id}/{filename}")
 def serve_item_image(item_id: str = Path(...), filename: str = Path(...)):
-    return get_item_image(item_id, filename)
+    db: Session = SessionLocal()
+    image = db.query(Image).filter(Image.item_id == item_id, Image.filename == filename).first()
+    if image:
+        url = generate_presigned_url(image.s3_key)
+        db.close()
+        return {"url": url}
+    db.close()
+    return {"error": "Image not found"}
+
 
 @app.get("/item_images/{item_id}")
 def list_item_images(item_id: str):
-    return {"images": get_item_images(item_id)}
+    db: Session = SessionLocal()
+    images = db.query(Image).filter(Image.item_id == item_id).all()
+    urls = [generate_presigned_url(img.s3_key) for img in images]
+    db.close()
+    return {"images": urls}

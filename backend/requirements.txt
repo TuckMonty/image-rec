@@ -5,3 +5,9 @@ pillow
 torch
 torchvision
 faiss-cpu
+python-dotenv
+sqlalchemy
+psycopg2-binary
+boto3
+requests
+python-multipart

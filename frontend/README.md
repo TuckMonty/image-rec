@@ -28,3 +28,5 @@ This is a React-based frontend for the image recognition POC.
 ## Deployment
 - Designed for easy containerization and AWS deployment.
 - Configure API URL via environment variables.
+
+AWS account is under montymilktea

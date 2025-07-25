@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+
+# Data and environment
+/data/
+.env
+test_image.jpg
+test_endpoints.py
+
+# Git
+.git

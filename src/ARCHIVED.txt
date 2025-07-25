@@ -1,0 +1,2 @@
+# This directory is now migrated to backend/src/.
+# All code has been moved. This file is a placeholder to indicate archival.

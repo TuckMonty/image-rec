@@ -91,7 +91,7 @@ function ItemList() {
         <VStack align="start" spacing={4}>
           {items.map(item => (
             <Box key={item.item_id} display="flex" alignItems="center">
-              <Image src={`${API_URL}${item.preview_image}`} boxSize="60px" objectFit="cover" mr={3} borderRadius="md" />
+              <Image src={item.preview_image} boxSize="60px" objectFit="cover" mr={3} borderRadius="md" />
               <Box>
                 <Text fontWeight="bold">{item.item_name}</Text>
                 <Text fontSize="sm" color="gray.500">ID: {item.item_id}</Text>
@@ -129,7 +129,7 @@ function ItemList() {
               <VStack align="start" spacing={2}>
                 {viewImages.map((img, idx) => (
                   <Box key={idx} display="flex" alignItems="center">
-                    <Image src={`${API_URL}/item_image/${viewImagesItem.item_id}/${img}`} boxSize="120px" objectFit="cover" borderRadius="md" mr={2} />
+                    <Image src={img} boxSize="120px" objectFit="cover" borderRadius="md" mr={2} />
                     <Button size="sm" colorScheme="red" onClick={() => handleDeleteImage(img)}>Delete</Button>
                   </Box>
                 ))}
