@@ -1,7 +1,9 @@
 import React from "react";
 import { Input, Button, Text, Box } from "@chakra-ui/react";
 
-export default function ImageUploadInput({ id, onChange, file, multiple = true, accept = "image/*", buttonLabel = "Select Image", changeLabel = "Change Image", ...props }) {
+import { Spinner } from "@chakra-ui/react";
+
+export default function ImageUploadInput({ id, onChange, file, multiple = true, accept = "image/*", buttonLabel = "Select Image", changeLabel = "Change Image", isLoading = false, ...props }) {
   return (
     <Box mb={2}>
       <Input
@@ -20,9 +22,11 @@ export default function ImageUploadInput({ id, onChange, file, multiple = true, 
         variant="outline"
         mb={2}
         cursor="pointer"
+        isDisabled={isLoading}
       >
         {file ? changeLabel : buttonLabel}
       </Button>
+      {isLoading && <Spinner size="sm" ml={2} color="teal.500" />}
       {file && (
         Array.isArray(file) ? (
           file.map((f, idx) => (

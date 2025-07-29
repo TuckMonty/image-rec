@@ -1,12 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { ChakraProvider, Box, Heading, Text, Image, VStack, Spinner, Button, Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure, Input, FormLabel, useToast } from "@chakra-ui/react";
-import axios from "axios";
-
-import { BrowserRouter as Router, Routes, Route, Link as RouterLink } from "react-router-dom";
-import AddItemModal from "./AddItemModal";
+import { ChakraProvider, Box, Heading, Text } from "@chakra-ui/react";
+import { BrowserRouter as Router, Routes, Route} from "react-router-dom";
 import QueryImage from "./QueryImage";
-import RemoveItem from "./RemoveItem";
-import ItemList from "./ItemList";
 import ExistingItems from "./ExistingItems";
 import RecentItems from "./RecentItems";
 
@@ -18,19 +12,14 @@ function App() {
           <Heading mb={4}>Part Finder</Heading>
           <Text mb={2}>Upload images, remove items, and query the database.</Text>
           <Routes>
-            <Route path="/item/:itemId" element={<ItemList />} />
             <Route path="/items" element={<ExistingItems />} />
             <Route path="/" element={
               <>
-                <RecentItems />
                 <QueryImage />
-                <Box mt={4}>
-                  <Button as={RouterLink} to="/items" colorScheme="teal">View All Existing Items</Button>
-                </Box>
+                <RecentItems />
               </>
             } />
           </Routes>
-          <AddItemModal />
         </Box>
       </Router>
     </ChakraProvider>

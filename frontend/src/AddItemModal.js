@@ -65,8 +65,8 @@ export default function AddItemModal({ onAddItem }) {
   };
 
   return (
-    <Box mb={4}>
-      <Button colorScheme="blue" onClick={handleOpen}>Add New Item</Button>
+    <Box mb={2}>
+      <Button colorScheme="blue" onClick={handleOpen}>+ Add New Item</Button>
       <Modal isOpen={isOpen} onClose={onClose} size="md">
         <ModalOverlay />
         <ModalContent>

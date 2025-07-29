@@ -1,3 +1,6 @@
+# Update item metadata endpoint
+from fastapi import Body
+
 import os
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
@@ -50,16 +53,33 @@ def update_features():
 
 
 @app.post("/upload/")
-async def upload_image(item_id: str = Form(...), file: UploadFile = File(...), item_name: str = Form(None)):
+async def upload_image(item_id: str = Form(...), file: UploadFile = File(...), item_name: str = Form(None), meta_text: str = Form(None)):
     import tempfile
     db: Session = SessionLocal()
     # Ensure item exists or create it
     item = db.query(Item).filter(Item.id == item_id).first()
     if not item:
-        item = Item(id=item_id, name=item_name or item_id)
+        item = Item(id=item_id, name=item_name or item_id, meta_text=meta_text)
         db.add(item)
         db.commit()
         db.refresh(item)
+        # Prepare item dict before session closes
+        item_dict = {
+            "item_id": item.id,
+            "item_name": item.name,
+            "meta_text": item.meta_text,
+            "ctime": item.created_at.timestamp() if item.created_at else 0
+        }
+    else:
+        if meta_text is not None:
+            item.meta_text = meta_text
+            db.commit()
+        item_dict = {
+            "item_id": item.id,
+            "item_name": item.name,
+            "meta_text": item.meta_text,
+            "ctime": item.created_at.timestamp() if item.created_at else 0
+        }
     # Read file content into memory once
     from io import BytesIO
     file.file.seek(0)
@@ -82,7 +102,14 @@ async def upload_image(item_id: str = Form(...), file: UploadFile = File(...), i
     db.refresh(image)
     presigned_url = generate_presigned_url(s3_key)
     db.close()
-    return {"item_id": item_id, "filename": file.filename, "s3_key": s3_key, "url": presigned_url, "status": "uploaded to S3 and DB with vector"}
+    return {
+        "item": item_dict,
+        "filename": file.filename,
+        "s3_key": s3_key,
+        "url": presigned_url,
+        "meta_text": item_dict["meta_text"],
+        "status": "uploaded to S3 and DB with vector"
+    }
 
 
 import faiss
@@ -120,10 +147,12 @@ async def query_image(file: UploadFile = File(...), topk: int = Form(5)):
     for idx, dist in zip(I[0], D[0]):
         if idx < len(faiss_images):
             img = faiss_images[idx]
+            preview_url = generate_presigned_url(img.s3_key) if hasattr(img, "s3_key") else None
             matches.append({
                 "item_id": img.item_id,
                 "filename": img.filename,
-                "distance": float(dist)
+                "distance": float(dist),
+                "preview_image": preview_url
             })
     return JSONResponse({"matches": matches})
 
@@ -172,6 +201,18 @@ def delete_item_image(item_id: str, filename: str):
 def root():
     return {"message": "Image Recognition API is running."}
 
+@app.post("/item/{item_id}/metadata")
+async def update_item_metadata(item_id: str = Path(...), meta_text: str = Body(...)):
+    db: Session = SessionLocal()
+    item = db.query(Item).filter(Item.id == item_id).first()
+    if not item:
+        db.close()
+        return JSONResponse({"error": "Item not found"}, status_code=404)
+    item.meta_text = meta_text
+    db.commit()
+    db.close()
+    return {"item_id": item_id, "meta_text": meta_text, "status": "updated"}
+
 
 @app.get("/items/")
 def list_items():
@@ -188,6 +229,7 @@ def list_items():
             "item_id": item.id,
             "item_name": item.name,
             "preview_image": preview_url,
+            "meta_text": getattr(item, "meta_text", None),
             "ctime": item.created_at.timestamp() if item.created_at else 0
         })
     db.close()
@@ -208,6 +250,7 @@ def get_recent_items(limit: int = Query(3, ge=1)):
             "item_id": item.id,
             "item_name": item.name,
             "preview_image": preview_url,
+            "meta_text": getattr(item, "meta_text", None),
             "ctime": item.created_at.timestamp() if item.created_at else 0
         })
     db.close()

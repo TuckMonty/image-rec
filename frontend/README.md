@@ -30,3 +30,5 @@ This is a React-based frontend for the image recognition POC.
 - Configure API URL via environment variables.
 
 AWS account is under montymilktea
+scrappy deployment: 
+aws s3 sync build/ s3://image-rec-frontend  

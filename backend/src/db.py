@@ -18,6 +18,7 @@ class Item(Base):
     __tablename__ = "items"
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    meta_text = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     images = relationship("Image", back_populates="item")
 

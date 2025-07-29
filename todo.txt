@@ -4,3 +4,4 @@ To work around it for testing, set the environment variable KMP_DUPLICATE_LIB_OK
 This will allow the server to run despite the conflict.
 For a permanent fix, you may need to align package versions or use a different vector search library, but this workaround is safe for prototyping.
 
+- I think the query function is referencing items that no have already been deleted
