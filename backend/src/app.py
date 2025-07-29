@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
-from fastapi import FastAPI, File, UploadFile, Form, Path
+from fastapi import FastAPI, File, UploadFile, Form, Path, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
@@ -194,6 +194,24 @@ def list_items():
     result.sort(key=lambda x: x["ctime"])
     return {"items": result}
 
+@app.get("/items/recent")
+def get_recent_items(limit: int = Query(3, ge=1)):
+    db: Session = SessionLocal()
+    items = db.query(Item).order_by(Item.created_at.desc()).limit(limit).all()
+    result = []
+    for item in items:
+        images = item.images
+        preview_url = None
+        if images:
+            preview_url = generate_presigned_url(images[0].s3_key)
+        result.append({
+            "item_id": item.id,
+            "item_name": item.name,
+            "preview_image": preview_url,
+            "ctime": item.created_at.timestamp() if item.created_at else 0
+        })
+    db.close()
+    return {"items": result}
 
 @app.get("/item_image/{item_id}/{filename}")
 def serve_item_image(item_id: str = Path(...), filename: str = Path(...)):

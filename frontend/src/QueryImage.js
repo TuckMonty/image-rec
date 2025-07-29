@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Box, Button, Input, FormLabel, VStack, useToast, Text, Image } from "@chakra-ui/react";
+import { Box, Button, FormLabel, VStack, useToast, Text, Image } from "@chakra-ui/react";
+import ImageUploadInput from "./ImageUploadInput";
 import axios from "axios";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8000";
@@ -29,9 +30,15 @@ export default function QueryImage() {
 
   return (
     <Box borderWidth={1} borderRadius="md" p={4} mb={4}>
-      <FormLabel>Query Image</FormLabel>
-      <Input type="file" accept="image/*" onChange={e => setFile(e.target.files[0])} mb={2} />
-      <Button colorScheme="green" onClick={handleQuery} mb={2}>Query Database</Button>
+      <FormLabel>Find a Part</FormLabel>
+      <ImageUploadInput
+        id="query-image-upload"
+        onChange={e => setFile(e.target.files[0])}
+        file={file}
+        buttonLabel="Select Image"
+        changeLabel="Change Image"
+      />
+      <Button colorScheme="green" onClick={handleQuery} mb={2}>Check Database</Button>
       {results.length > 0 && (
         <Box mt={4}>
           <Text fontWeight="bold">Top Matches:</Text>

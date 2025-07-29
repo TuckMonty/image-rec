@@ -1,3 +1,4 @@
+import ImageUploadInput from "./ImageUploadInput";
 import React, { useState } from "react";
 import {
   Box,
@@ -24,7 +25,8 @@ function generateRandomId() {
   return Math.random().toString(36).substring(2, 10);
 }
 
-export default function AddItemModal() {
+
+export default function AddItemModal({ onAddItem }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [itemName, setItemName] = useState("");
   const [itemId, setItemId] = useState(generateRandomId());
@@ -39,19 +41,23 @@ export default function AddItemModal() {
   };
 
   const handleUpload = async () => {
-    if (!itemName || files.length === 0) {
-      toast({ title: "Please provide an item name and select images.", status: "warning" });
+    if (files.length === 0) {
+      toast({ title: "Please select images.", status: "warning" });
       return;
     }
     try {
+      const nameToUse = itemName.trim() === "" ? itemId : itemName;
       for (let file of files) {
         const formData = new FormData();
         formData.append("item_id", itemId);
-        formData.append("item_name", itemName);
+        formData.append("item_name", nameToUse);
         formData.append("file", file);
         await axios.post(`${API_URL}/upload/`, formData, { headers: { "Content-Type": "multipart/form-data" } });
       }
-      toast({ title: `Item '${itemName}' added!`, status: "success" });
+      toast({ title: `Item '${nameToUse}' added!`, status: "success" });
+      if (typeof onAddItem === 'function') {
+        onAddItem({ itemId, itemName });
+      }
       onClose();
     } catch (err) {
       toast({ title: "Upload failed.", status: "error" });
@@ -68,13 +74,19 @@ export default function AddItemModal() {
           <ModalCloseButton />
           <ModalBody>
             <VStack align="stretch" spacing={3}>
-              <FormLabel>Item Name</FormLabel>
-              <Input value={itemName} onChange={e => setItemName(e.target.value)} placeholder="Enter item name" />
+              <FormLabel>Item Name (optional)</FormLabel>
+              <Input value={itemName} onChange={e => setItemName(e.target.value)} placeholder="Leave blank to use ID as name" />
               <FormLabel>Item ID (auto-generated)</FormLabel>
               <Input value={itemId} isReadOnly mb={2} />
-              <FormLabel>Images</FormLabel>
-              <Input type="file" accept="image/*" multiple onChange={e => setFiles(Array.from(e.target.files))} />
-              <Text fontSize="sm" color="gray.500">You can select multiple images.</Text>
+              <FormLabel>Image</FormLabel>
+              <ImageUploadInput
+                id="add-item-upload"
+                multiple
+                onChange={e => setFiles(Array.from(e.target.files))}
+                file={files.length > 0 ? files : null}
+                buttonLabel="Select Image"
+                changeLabel="Change Image"
+              />
             </VStack>
           </ModalBody>
           <ModalFooter>
