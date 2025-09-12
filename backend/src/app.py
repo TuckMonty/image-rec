@@ -34,21 +34,22 @@ FEATURES_PATH = "data/features_multi.npy"
 os.makedirs(DATA_DIR, exist_ok=True)
 extractor = FeatureExtractor()
 
-def update_features():
-    # Re-extract features for all images in DATA_DIR, grouped by item (subfolder)
-    features = {}
-    for item_id in os.listdir(DATA_DIR):
-        item_path = os.path.join(DATA_DIR, item_id)
-        if os.path.isdir(item_path):
-            item_features = []
-            for fname in os.listdir(item_path):
-                if fname.lower().endswith((".jpg", ".jpeg", ".png")):
-                    fpath = os.path.join(item_path, fname)
-                    feat = extractor.extract(fpath)
-                    item_features.append(feat)
-            if item_features:
-                features[item_id] = item_features
-    np.save(FEATURES_PATH, features)
+# def update_features():
+#     # This function is no longer needed since we use database-based FAISS index
+#     # Re-extract features for all images in DATA_DIR, grouped by item (subfolder)
+#     features = {}
+#     for item_id in os.listdir(DATA_DIR):
+#         item_path = os.path.join(DATA_DIR, item_id)
+#         if os.path.isdir(item_path):
+#             item_features = []
+#             for fname in os.listdir(item_path):
+#                 if fname.lower().endswith((".jpg", ".jpeg", ".png")):
+#                     fpath = os.path.join(item_path, fname)
+#                     feat = extractor.extract(fpath)
+#                     item_features.append(feat)
+#             if item_features:
+#                 features[item_id] = item_features
+#     np.save(FEATURES_PATH, features)
 
 
 
@@ -100,6 +101,8 @@ async def upload_image(item_id: str = Form(...), file: UploadFile = File(...), i
     db.add(image)
     db.commit()
     db.refresh(image)
+    # Rebuild FAISS index after adding new image
+    rebuild_faiss_index()
     presigned_url = generate_presigned_url(s3_key)
     db.close()
     return {
@@ -129,6 +132,11 @@ def build_faiss_index():
     return index, images, vectors
 
 faiss_index, faiss_images, faiss_vectors = build_faiss_index()
+
+def rebuild_faiss_index():
+    """Rebuild the global FAISS index after database changes"""
+    global faiss_index, faiss_images, faiss_vectors
+    faiss_index, faiss_images, faiss_vectors = build_faiss_index()
 
 @app.post("/query/")
 async def query_image(file: UploadFile = File(...), topk: int = Form(5)):
@@ -175,7 +183,7 @@ async def delete_item(item_id: str):
         db.delete(item)
     db.commit()
     db.close()
-    update_features()
+    rebuild_faiss_index()  # Rebuild FAISS index after deletion
     return {"item_id": item_id, "status": "deleted from S3 and DB"}
 
 
@@ -192,7 +200,7 @@ def delete_item_image(item_id: str, filename: str):
         db.delete(image)
         db.commit()
         db.close()
-        update_features()
+        rebuild_faiss_index()  # Rebuild FAISS index after deletion
         return {"item_id": item_id, "filename": filename, "status": "deleted from S3 and DB"}
     db.close()
     return {"error": "File not found in DB"}
