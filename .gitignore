@@ -1,6 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React build
+frontend/build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+backend/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# Logs
+*.log
+logs/
+
+# Data directories
 /data
 data/*
-data/features_multi.npy
-data/features_multi.npy
-backend/.env
+backend/data/
+
+# Secrets
+secrets.json
+credentials.json
+outputs.txt

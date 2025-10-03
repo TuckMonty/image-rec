@@ -66,12 +66,24 @@
 For more details, see the main project README.
 
 
-scrappy backend deployment, when connected to the ec2:
+## Production Deployment
 
-docker run -d --name image-rec-backend -p 8000:8000 \
-  -e DATABASE_URL=... \
-  -e AWS_ACCESS_KEY_ID=... \
-  -e AWS_SECRET_ACCESS_KEY=... \
-  -e AWS_REGION=us-east-1 \
-  -e S3_BUCKET=image-rec-backend \
-  image-rec-backend
+**IMPORTANT**: Never commit credentials to git. Use environment variables or secrets management.
+
+### Manual Deployment (Legacy - to be replaced by CI/CD)
+
+When connected to EC2:
+1. Pull latest code: `git pull`
+2. Build image: `docker build -t image-rec-backend .`
+3. Run container with environment variables from AWS Secrets Manager or .env file:
+   ```sh
+   docker run -d --name image-rec-backend -p 8000:8000 \
+     -e DATABASE_URL=${DATABASE_URL} \
+     -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+     -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+     -e AWS_REGION=${AWS_REGION} \
+     -e S3_BUCKET=${S3_BUCKET} \
+     image-rec-backend
+   ```
+
+See `docs/DEPLOYMENT.md` for automated CI/CD deployment instructions.
