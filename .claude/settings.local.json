@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(terraform validate)",
+      "Bash(aws ec2 delete-security-group:*)",
+      "Bash(aws ec2 describe-subnets:*)"
     ],
     "deny": [],
     "ask": []

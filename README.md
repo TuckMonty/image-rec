@@ -7,7 +7,7 @@ A full-stack image recognition application that allows users to upload items wit
 - **Backend**: FastAPI (Python) with PostgreSQL database
 - **Frontend**: React with Chakra UI
 - **Image Storage**: AWS S3
-- **Deployment**: AWS ECS Fargate with automated CI/CD via GitHub Actions
+- **Deployment**: Single AWS EC2 instance with automated CI/CD via GitHub Actions
 
 ## Project Structure
 
@@ -47,11 +47,21 @@ npm install
 npm start
 ```
 
-### Deployment
+### Deployment to AWS
 
-For automated deployment setup, see:
+This project uses Infrastructure as Code (Terraform) and automated CI/CD (GitHub Actions).
+
+**Initial Setup (One-Time):**
+1. Deploy infrastructure with Terraform
+2. Deploy initial Docker image to EC2 using deployment script
+3. Configure GitHub Secrets
+4. Push to `main` branch → Automated deployments from then on
+
+For detailed instructions, see:
 - **Quick Setup**: [`docs/QUICK_START.md`](docs/QUICK_START.md)
 - **Full Guide**: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+
+**Important:** After running `terraform apply`, you must run the initial deployment script (`deploy-ec2.ps1` on Windows or `deploy-ec2.sh` on Linux/Mac) to build and deploy the first Docker image to your EC2 instance.
 
 ## Features
 
@@ -75,9 +85,8 @@ For automated deployment setup, see:
 - Axios
 
 **Infrastructure:**
-- AWS ECS Fargate
-- AWS ECR
-- AWS RDS
+- AWS EC2 (single instance)
+- AWS RDS PostgreSQL
 - AWS S3
 - GitHub Actions
 - Terraform
@@ -106,15 +115,21 @@ S3_BUCKET=your-bucket-name
 
 **Never commit `.env` files to git!**
 
-## Deployment
+## Deployment Workflow
 
-This project uses modern CI/CD practices:
+### Initial Setup
+1. **Deploy Infrastructure**: Run `terraform apply` to create AWS resources (VPC, EC2, RDS, S3, etc.)
+2. **Deploy Initial Image**: Run `deploy-ec2.ps1` (Windows) or `deploy-ec2.sh` (Linux/Mac) to build and deploy the Docker image to EC2
+3. **Configure CI/CD**: Set up GitHub Secrets for automated deployments
+
+### Automated Deployments
+After initial setup, deployments are fully automated:
 
 1. Push code to `main` branch
-2. GitHub Actions automatically builds Docker images
-3. Images are pushed to AWS ECR
-4. ECS service is updated with new image
-5. Zero-downtime deployment
+2. GitHub Actions automatically builds Docker image
+3. Image is transferred to EC2 via AWS Systems Manager
+4. Service is restarted with new image
+5. Application is available at `http://<EC2_IP>:8000`
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for complete setup instructions.
 

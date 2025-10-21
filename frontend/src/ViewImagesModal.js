@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, VStack, Spinner, Box, Text, Image, Button, FormLabel, useToast } from "@chakra-ui/react";
 import ImageUploadInput from "./ImageUploadInput";
 import axios from "axios";
-import { useParams, useNavigate, Link as RouterLink } from "react-router-dom";
 export default function ViewImagesModal({ isOpen, onClose, item }) {
   const [images, setImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(false);

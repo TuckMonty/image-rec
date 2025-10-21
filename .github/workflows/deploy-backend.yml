@@ -1,4 +1,4 @@
-name: Deploy Backend to AWS
+name: Deploy Backend to AWS EC2
 
 on:
   push:
@@ -11,14 +11,11 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: image-rec-backend
-  ECS_SERVICE: image-rec-backend-service
-  ECS_CLUSTER: image-rec-cluster
-  CONTAINER_NAME: backend
+  PROJECT_NAME: image-rec
 
 jobs:
   deploy:
-    name: Build and Deploy Backend
+    name: Build and Deploy Backend to EC2
     runs-on: ubuntu-latest
 
     steps:
@@ -32,48 +29,86 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Get EC2 instance information
+        id: ec2-info
+        run: |
+          cd infrastructure/terraform
+          INSTANCE_ID=$(terraform output -raw instance_id 2>/dev/null || echo "")
+          EC2_IP=$(terraform output -raw ec2_public_ip 2>/dev/null || echo "")
 
-      - name: Build, tag, and push image to Amazon ECR
+          if [ -z "$INSTANCE_ID" ]; then
+            echo "Error: Could not get instance ID from Terraform"
+            exit 1
+          fi
+
+          echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
+          echo "ec2_ip=$EC2_IP" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
         id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
           cd backend
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          docker build -t image-rec-backend:${{ github.sha }} .
+          docker tag image-rec-backend:${{ github.sha }} image-rec-backend:latest
 
-      - name: Download current task definition
+      - name: Save Docker image
         run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ env.ECS_SERVICE }} \
-            --query taskDefinition > task-definition.json
+          docker save image-rec-backend:latest | gzip > /tmp/image-rec-backend.tar.gz
 
-      - name: Fill in the new image ID in the Amazon ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.build-image.outputs.image }}
+      - name: Wait for EC2 instance to be ready
+        run: |
+          aws ec2 wait instance-running --instance-ids ${{ steps.ec2-info.outputs.instance_id }} --region ${{ env.AWS_REGION }}
+          echo "Instance is running"
 
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+      - name: Deploy to EC2 via Systems Manager
+        run: |
+          # Create temporary S3 bucket for image transfer
+          TEMP_BUCKET="${{ env.PROJECT_NAME }}-deploy-temp-${{ github.run_id }}"
+          aws s3 mb s3://$TEMP_BUCKET --region ${{ env.AWS_REGION }}
+
+          # Upload Docker image to S3
+          aws s3 cp /tmp/image-rec-backend.tar.gz s3://$TEMP_BUCKET/image-rec-backend.tar.gz
+
+          # Deploy via SSM
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids ${{ steps.ec2-info.outputs.instance_id }} \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "aws s3 cp s3://'"$TEMP_BUCKET"'/image-rec-backend.tar.gz /tmp/image-rec-backend.tar.gz",
+              "docker load < /tmp/image-rec-backend.tar.gz",
+              "rm /tmp/image-rec-backend.tar.gz",
+              "docker stop image-rec-backend 2>/dev/null || true",
+              "docker rm image-rec-backend 2>/dev/null || true",
+              "systemctl daemon-reload",
+              "systemctl enable image-rec-backend",
+              "systemctl restart image-rec-backend",
+              "sleep 5",
+              "systemctl status image-rec-backend"
+            ]' \
+            --region ${{ env.AWS_REGION }} \
+            --query "Command.CommandId" \
+            --output text)
+
+          # Wait for command to complete
+          echo "Waiting for deployment to complete..."
+          aws ssm wait command-executed \
+            --command-id $COMMAND_ID \
+            --instance-id ${{ steps.ec2-info.outputs.instance_id }} \
+            --region ${{ env.AWS_REGION }}
+
+          # Clean up S3 bucket
+          aws s3 rb s3://$TEMP_BUCKET --force
+
+          echo "Deployment complete!"
 
       - name: Deployment summary
         run: |
           echo "### Deployment Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image**: ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Service**: ${{ env.ECS_SERVICE }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Cluster**: ${{ env.ECS_CLUSTER }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Instance ID**: ${{ steps.ec2-info.outputs.instance_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend URL**: http://${{ steps.ec2-info.outputs.ec2_ip }}:8000" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Test the deployment:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "curl http://${{ steps.ec2-info.outputs.ec2_ip }}:8000/health" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

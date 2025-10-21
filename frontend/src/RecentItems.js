@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Box, Heading, Text, Image, VStack, Spinner, Button, Link as ChakraLink } from "@chakra-ui/react";
+import { useEffect, useState } from "react";
+import { Box, Heading, Text, Image, VStack, Spinner, Button } from "@chakra-ui/react";
 import axios from "axios";
 import AddItemModal from "./AddItemModal";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";

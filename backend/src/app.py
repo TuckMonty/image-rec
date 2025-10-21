@@ -13,11 +13,14 @@ import numpy as np
 
 from .feature_extractor import FeatureExtractor
 from .image_database_multi import ImageDatabaseMulti
-from .db import SessionLocal, Item, Image
+from .db import SessionLocal, Item, Image, Base, engine
 from sqlalchemy.orm import Session
 from .storage import upload_fileobj_to_s3, generate_presigned_url, delete_file_from_s3
 
 app = FastAPI()
+
+# Create database tables on startup if they don't exist
+Base.metadata.create_all(bind=engine)
 
 # Add CORS middleware
 app.add_middleware(

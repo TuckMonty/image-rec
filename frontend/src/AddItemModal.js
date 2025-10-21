@@ -1,5 +1,5 @@
 import ImageUploadInput from "./ImageUploadInput";
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Button,
@@ -15,7 +15,6 @@ import {
   ModalCloseButton,
   useDisclosure,
   VStack,
-  Text
 } from "@chakra-ui/react";
 import axios from "axios";
 

@@ -7,3 +7,5 @@ project_name    = "image-rec"
 environment     = "production"
 db_password     = "your-secure-database-password-here"
 s3_bucket_name  = "image-rec-backend"
+instance_type   = "t3.small"
+ssh_key_name    = ""  # Optional: EC2 SSH key pair name for direct SSH access

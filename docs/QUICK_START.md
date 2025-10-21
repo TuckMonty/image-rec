@@ -41,26 +41,42 @@ terraform apply
 
 Save the outputs - you'll need them for GitHub Secrets.
 
-## 3. Configure GitHub Secrets
+## 3. Deploy Initial Docker Image to EC2
+
+**CRITICAL**: You must deploy the initial Docker image to EC2 after Terraform creates the infrastructure.
+
+**On Windows:**
+```powershell
+cd ../  # Go to infrastructure directory
+.\deploy-ec2.ps1
+```
+
+**On Linux/Mac:**
+```bash
+cd ../  # Go to infrastructure directory
+chmod +x deploy-ec2.sh
+./deploy-ec2.sh
+```
+
+This script will:
+- Build your backend Docker image
+- Save it as a tar file
+- Transfer it to EC2 via AWS Systems Manager
+- Load and run the image on EC2
+- Start the backend service
+
+**Note**: This only needs to be done once. Future deployments are automated via GitHub Actions.
+
+## 4. Configure GitHub Secrets
 
 Go to: Repository → Settings → Secrets and variables → Actions
 
 Add these secrets:
-- `AWS_ACCESS_KEY_ID` - From step 1
-- `AWS_SECRET_ACCESS_KEY` - From step 1
-- `REACT_APP_API_URL` - ALB DNS from terraform output
+- `AWS_ACCESS_KEY_ID` - Your new AWS access key from step 1
+- `AWS_SECRET_ACCESS_KEY` - Your new AWS secret key from step 1
+- `REACT_APP_API_URL` - EC2 backend URL from terraform output (e.g., `http://44.200.123.45:8000`)
 
-## 4. Update GitHub Actions Workflow Variables
-
-Edit `.github/workflows/deploy-backend.yml`:
-```yaml
-env:
-  ECR_REPOSITORY: image-rec-backend  # Should match terraform output
-  ECS_SERVICE: image-rec-backend-service  # Should match terraform output
-  ECS_CLUSTER: image-rec-cluster  # Should match terraform output
-```
-
-## 5. Push and Deploy
+## 5. Push and Deploy (Automated)
 
 ```bash
 git add .
@@ -68,23 +84,23 @@ git commit -m "Setup automated deployment"
 git push origin main
 ```
 
-GitHub Actions will automatically build and deploy!
+GitHub Actions will automatically build and deploy to EC2!
 
 ## 6. Verify Deployment
 
 ```bash
-# Get ALB URL from terraform
-terraform output alb_dns_name
+# Get EC2 IP from terraform
+terraform output ec2_public_ip
 
 # Test the backend
-curl http://<alb-dns-name>/health
+curl http://<ec2-ip>:8000/health
 ```
 
 ## Next Steps
 
 - Setup custom domain with Route 53
-- Configure HTTPS with ACM certificate
-- Enable auto-scaling based on traffic
-- Setup CloudWatch alarms
+- Configure HTTPS with Nginx reverse proxy or ALB
+- Setup CloudWatch alarms for monitoring
+- Configure automated backups for RDS
 
 See full documentation in `docs/DEPLOYMENT.md`.
